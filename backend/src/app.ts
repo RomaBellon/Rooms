@@ -196,32 +196,64 @@ app.post(
           startTime: { type: 'string', format: 'date-time' },
           endTime: { type: 'string', format: 'date-time' },
           notes: { type: 'string' },
-          userId: { type: 'string' } 
+          userId: { type: 'string' }
         },
-        required: ['title', 'roomId', 'startTime', 'endTime', 'userId'] 
+        required: ['title', 'roomId', 'startTime', 'endTime', 'userId']
       }
     }
   },
   async (request, reply) => {
-    
     const { title, roomId, startTime, endTime, notes, userId } = request.body as any;
 
-    
-    const newBooking = await app.prisma.booking.create({
-      data: {
-        title,
+    const newStartTime = new Date(startTime);
+    const newEndTime = new Date(endTime);
+
+    const conflictingBookings = await app.prisma.booking.findMany({
+      where: {
         roomId,
-        startTime: new Date(startTime),
-        endTime: new Date(endTime),
-        notes,
-        userId, 
+        startTime: { lt: newEndTime },
+        endTime: { gt: newStartTime },
       },
     });
 
-    reply.code(201).send(newBooking);
+    if (conflictingBookings.length > 0) {
+      reply.code(409).send({
+        message: 'Время занято. Выберите другой временной интервал.',
+        conflicts: conflictingBookings.map(b => ({
+          id: b.id,
+          title: b.title,
+          startTime: b.startTime,
+          endTime: b.endTime,
+        })),
+      });
+      return; 
+    }
+
+    try {
+      const newBooking = await app.prisma.booking.create({
+        data: {
+          title,
+          roomId,
+          startTime: newStartTime,
+          endTime: newEndTime,
+          notes,
+          userId,
+        },
+      });
+
+      await app.prisma.room.update({
+        where: { id: roomId },
+        data: { status: 'booked' },
+      });
+
+      reply.code(201).send(newBooking);
+
+    } catch (error) {
+      console.error("Ошибка при создании брони:", error);
+      reply.code(500).send({ message: "Не удалось создать бронь." });
+    }
   }
 );
-
 
   /**
    * GET /api/users — примеры чтения данных из базы через Prisma.
@@ -324,6 +356,185 @@ app.post(
       reply.type('application/json').send(app.swagger())
     }
   )
+
+  /**
+ * GET /api/bookings — возвращает список всех бронирований.
+ */
+app.get(
+  '/api/bookings',
+  {
+    schema: {
+      operationId: 'listBookings',
+      tags: ['Bookings'],
+      summary: 'Возвращает список всех бронирований',
+      response: {
+        200: {
+          description: 'Список бронирований',
+        }
+      }
+    }
+  },
+  async (_req, _reply) => {
+    const bookings = await app.prisma.booking.findMany({
+      include: {
+        room: true,
+        user: {
+          select: { id: true, email: true } 
+        }
+      },
+      orderBy: {
+        startTime: 'desc',
+      },
+    });
+
+    const bookingsDto = bookings.map(booking => ({
+      id: booking.id,
+      title: booking.title,
+      startTime: booking.startTime.toISOString(),
+      endTime: booking.endTime.toISOString(),
+      notes: booking.notes,
+      room: {
+        id: booking.room.id,
+        name: booking.room.name,
+        number: booking.room.number,
+      },
+      user: {
+        id: booking.user.id,
+        email: booking.user.email,
+      }
+    }));
+
+    return bookingsDto;
+  }
+);
+
+/**
+ * DELETE /api/bookings/:id — удаляет бронь.
+ */
+app.delete(
+  '/api/bookings/:id',
+  {
+    schema: {
+      operationId: 'deleteBooking',
+      tags: ['Bookings'],
+      summary: 'Удаляет существующую бронь',
+      params: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' }
+        }
+      }
+    }
+  },
+  async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    try {
+      await app.prisma.$transaction(async (tx) => {
+        const booking = await tx.booking.findUniqueOrThrow({
+          where: { id },
+        });
+
+        await tx.booking.delete({
+          where: { id },
+        });
+
+        await tx.room.update({
+          where: { id: booking.roomId },
+          data: { status: 'available' },
+        });
+      });
+
+      reply.code(204).send();
+
+    } catch (error) {
+      console.error("Ошибка при удалении брони:", error);
+      reply.code(404).send({ message: "Бронь не найдена." });
+    }
+  }
+);
+
+/**
+ * PATCH /api/bookings/:id — обновляет существующую бронь.
+ */
+app.patch(
+  '/api/bookings/:id',
+  {
+    schema: {
+      operationId: 'updateBooking',
+      tags: ['Bookings'],
+      summary: 'Обновляет существующую бронь',
+      params: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' }
+        }
+      },
+      body: {
+        type: 'object',
+        properties: {
+          title: { type: 'string' },
+          startTime: { type: 'string', format: 'date-time' },
+          endTime: { type: 'string', format: 'date-time' },
+        },
+      }
+    }
+  },
+  async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { title, startTime, endTime } = request.body as any;
+
+    const newStartTime = new Date(startTime);
+    const newEndTime = new Date(endTime);
+
+    try {
+      const existingBooking = await app.prisma.booking.findUnique({
+        where: { id },
+        select: { roomId: true } 
+      });
+
+      if (!existingBooking) {
+        return reply.code(404).send({ message: "Бронь не найдена." });
+      }
+
+      const conflictingBookings = await app.prisma.booking.findMany({
+        where: {
+          roomId: existingBooking.roomId,
+          id: { not: id }, 
+          startTime: { lt: newEndTime },
+          endTime: { gt: newStartTime },
+        },
+      });
+
+      if (conflictingBookings.length > 0) {
+        reply.code(409).send({
+          message: 'Время занято. Выберите другой временной интервал.',
+          conflicts: conflictingBookings.map(b => ({
+            id: b.id,
+            title: b.title,
+            startTime: b.startTime,
+            endTime: b.endTime,
+          })),
+        });
+        return; 
+      }
+
+      const updatedBooking = await app.prisma.booking.update({
+        where: { id },
+        data: {
+          title,
+          startTime: newStartTime,
+          endTime: newEndTime,
+        },
+      });
+      reply.code(200).send(updatedBooking);
+
+    } catch (error) {
+      console.error("Ошибка при обновлении брони:", error);
+      reply.code(404).send({ message: "Бронь не найдена." });
+    }
+  }
+);
 
   return app
 }

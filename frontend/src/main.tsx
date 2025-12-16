@@ -4,17 +4,17 @@ import './index.css'
 import App from './App.tsx'
 import { AuthProvider } from '@/context/auth'
 
-// async function enableMocking() {
-//   if (import.meta.env.DEV) { //&& import.meta.env.VITE_USE_MOCKS !== 'false'
-//     const { worker } = await import('./mocks/browser')
-//    await worker.start({
-//      onUnhandledRequest: "bypass",
-//      serviceWorker: { url: "/mockServiceWorker.js" },
-//    });
-//   }
-// }
+async function enableMocking() {
+  // if (import.meta.env.DEV) { 
+  //   const { worker } = await import('./mocks/browser')
+  //  await worker.start({
+  //    onUnhandledRequest: "bypass",
+  //    serviceWorker: { url: "/mockServiceWorker.js" },
+  //  });
+  // }
+}
 
-// enableMocking().then(() => {
+enableMocking().then(() => {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <AuthProvider>
@@ -22,4 +22,4 @@ import { AuthProvider } from '@/context/auth'
       </AuthProvider>
     </StrictMode>,
   )
-// });
+});

@@ -17,27 +17,24 @@ export interface RoomsResponseDto {
   total: number;
 }
 
-// Вспомогательная функция для "перевода" данных с бэкенда на язык фронтенда
 const mapRoomToDto = (room: any): RoomDto => ({
   id: room.id,
-  code: room.number,        // number -> code
+  code: room.number,        
   name: room.name,
   capacity: room.capacity,
-  equipment: room.features, // features -> equipment
-  status: room.status,      // status -> status
+  equipment: room.features, 
+  status: room.status,      
 });
 
 export async function fetchRooms(page = 1): Promise<RoomsResponseDto> {
-  // Наш бэкенд пока не поддерживает пагинацию, поэтому мы просто получаем все комнаты
+
   const { data } = await http.get<any[]>("/rooms"); 
 
-  // Преобразуем каждый объект из массива с помощью нашей функции
   const items = data.map(mapRoomToDto);
 
-  // Возвращаем данные в том формате, который ожидает компонент RoomsTable
   return {
     items,
     page,
-    total: items.length, // Пока общее число равно количеству загруженных
+    total: items.length, 
   };
 }

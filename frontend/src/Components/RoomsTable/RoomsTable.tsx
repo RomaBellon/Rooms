@@ -1,10 +1,9 @@
-import { useEffect, useState } from "react";
 import {
   Paper, Table, TableHead, TableRow, TableCell, TableBody,
-  Chip, CircularProgress, Box, IconButton, Stack, Typography
+  Chip, IconButton, Stack, Typography
 } from "@mui/material";
 import { VisibilityOutlined, EditOutlined, DeleteOutline, Groups2Outlined } from "@mui/icons-material";
-import { fetchRooms, type RoomDto } from "@/api/roomsApi";
+import type { RoomDto } from "@/api/roomsApi"; 
 
 const STATUS_LABEL: Record<RoomDto["status"], string> = {
   available: "Доступна",
@@ -21,30 +20,8 @@ const EQUIP_LABEL: Record<string, string> = {
   computers: "Компьютеры", board: "Доска",
 };
 
-export function RoomsTable() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState<string | null>(null);
-  const [items, setItems]     = useState<RoomDto[]>([]);
 
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        setLoading(true);
-        const data = await fetchRooms(1);
-        if (mounted) setItems(data.items);
-      } catch (e) {
-        if (mounted) setError((e as Error).message || "Ошибка загрузки");
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-    return () => { mounted = false; };
-  }, []);
-
-  if (loading) return <Box sx={{ p: 3, display: "grid", placeItems: "center" }}><CircularProgress /></Box>;
-  if (error)   return <Box sx={{ p: 3 }}><Typography color="error">Не удалось загрузить данные: {error}</Typography></Box>;
-
+export function RoomsTable({ items }: { items: RoomDto[] }) {
   return (
     <Paper elevation={0} sx={{ borderRadius: 2, overflow: "hidden", border: "1px solid #eef0f3" }}>
       <Table size="small">
