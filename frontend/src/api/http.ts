@@ -1,7 +1,7 @@
 import axios from "axios";
 
 export const http = axios.create({
-    baseURL: "/api",
+    baseURL: "https://rooms-bnei.onrender.com/api",
     timeout: 10_000,
     headers: { "Content-Type": "application/json" },
 });
