@@ -37,7 +37,7 @@ export async function buildApp() {
 await app.register(cors, {
   origin: ['https://romabellon.github.io'],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],});
 
   /**
